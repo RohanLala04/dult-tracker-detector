@@ -23,6 +23,8 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
     @Published private(set) var statusMessage = "Starting Bluetooth..."
 
     private var central: CBCentralManager!
+    /// Persists every sighting; this is the dataset the ML pipeline trains on.
+    let database = DatabaseManager()
     /// Working state, mutated on every advertisement (main queue).
     private var deviceMap: [UUID: DiscoveredDevice] = [:]
     private var receivedCount = 0
@@ -77,6 +79,16 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
         // Parse the DULT payload if this advertisement carries 0xFCB2 service
         // data. DULTStatus.init returns nil for empty (unparseable) data.
         let dultStatus = serviceData?[Self.dultServiceUUID].flatMap(DULTStatus.init(serviceData:))
+
+        database.insertSighting(
+            peripheralUUID: peripheral.identifier.uuidString,
+            rssi: rssiValue,
+            timestamp: now,
+            isDULT: dultStatus != nil,
+            nearOwnerBit: dultStatus?.isNearOwner.map { $0 ? 1 : 0 },
+            networkID: dultStatus.map { Int($0.networkIDByte) },
+            rawPayload: dultStatus?.rawServiceData
+        )
 
         if var device = deviceMap[peripheral.identifier] {
             if rssiValue != Self.invalidRSSI {

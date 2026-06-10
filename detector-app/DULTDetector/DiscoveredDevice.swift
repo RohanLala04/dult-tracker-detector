@@ -46,6 +46,11 @@ struct DULTStatus: Equatable {
     var rawHexString: String {
         rawServiceData.map { String(format: "%02X", $0) }.joined()
     }
+
+    /// The raw network ID byte (always present - init fails on empty data).
+    var networkIDByte: UInt8 {
+        [UInt8](rawServiceData)[0]
+    }
 }
 
 /// One nearby BLE device, accumulated across every advertisement heard from it.
