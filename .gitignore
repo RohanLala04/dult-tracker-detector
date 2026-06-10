@@ -1,0 +1,29 @@
+# Agentic AI files - keep local only
+CLAUDE.md
+.claude/
+AGENTS.md
+.cursor/
+.mcp.json
+
+# Secrets
+.env
+*.key
+
+# macOS
+.DS_Store
+
+# Xcode
+detector-app/build/
+detector-app/DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Python
+ml-pipeline/__pycache__/
+ml-pipeline/venv/
+*.pyc
+
+# Android
+emulator-android/build/
+emulator-android/.gradle/
+emulator-android/local.properties
