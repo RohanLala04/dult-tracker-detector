@@ -121,13 +121,18 @@ def make_device(archetype: str, label: int, dwells: list[float], cal: Calibratio
         separated_ratio = 0.0
 
     elif archetype == "transient":
+        # Passersby are in motion, so their RSSI jitters too.
+        rssi_sigma = cal.rssi_sigma_static * rng.uniform(1.2, 2.5)
         visible_min = float(np.clip(rng.exponential(2.0), 0.2, 8.0))
         locations = 1
         # A small share are separated tags passing by (on a passerby's bag).
         separated_ratio = rng.uniform(0.6, 1.0) if rng.random() < 0.05 else 0.0
 
     elif archetype == "companion":
-        # Travels the whole itinerary, but its owner is present.
+        # Travels the whole itinerary, but its owner is present. Moves with
+        # the user, so it shows the same RSSI jitter a follower does - the
+        # separated ratio is what distinguishes it, not signal physics.
+        rssi_sigma = cal.rssi_sigma_static * rng.uniform(1.5, 3.5)
         visible_min = sum(dwells) * rng.uniform(0.85, 1.0)
         locations = len(dwells)
         separated_ratio = float(rng.beta(2, 12))

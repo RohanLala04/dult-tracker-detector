@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Synthetic co-travel data, training, and Core AI export for the DULT follower classifier"
 requires-python = ">=3.11"
 dependencies = [
+    "coreai-core==1.0.0b1",
+    "coreai-opt==0.2.0",
+    "coreai-torch==0.4.0",
     "numpy>=2.0,<3.0",
     "pandas>=2.2,<3.0",
     "scikit-learn>=1.5,<2.0",
