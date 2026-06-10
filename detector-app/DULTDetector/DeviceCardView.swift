@@ -1,9 +1,12 @@
 import SwiftUI
 
-/// One dashboard card for a discovered BLE device. Devices that have
-/// advertised the DULT service (0xFCB2) get an accent highlight and shield.
+/// One dashboard card for a discovered BLE device. Devices advertising the
+/// DULT service (0xFCB2) get a shield and an accent highlight; a DULT device
+/// reporting "separated" (away from its owner) gets a warning color instead.
 struct DeviceCardView: View {
     let device: DiscoveredDevice
+
+    private static let warningColor = Color.orange
 
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -11,25 +14,29 @@ struct DeviceCardView: View {
         return formatter
     }()
 
+    /// nil for ordinary devices; accent for near-owner DULT; warning for separated.
+    private var highlightColor: Color? {
+        guard device.isDULT else { return nil }
+        return device.isSeparated ? Self.warningColor : Color.accentColor
+    }
+
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: device.isDULT ? "shield.fill" : "dot.radiowaves.left.and.right")
+            Image(systemName: iconName)
                 .font(.title2)
-                .foregroundStyle(device.isDULT ? Color.accentColor : Color.secondary)
+                .foregroundStyle(highlightColor ?? Color.secondary)
                 .frame(width: 36)
 
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Text(device.name ?? "Unknown Device")
                         .font(.headline)
                         .lineLimit(1)
-                    if device.isDULT {
-                        Text("DULT")
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(Color.accentColor, in: Capsule())
-                            .foregroundStyle(.white)
+                    if let dult = device.dult {
+                        badge("DULT", color: highlightColor ?? .accentColor)
+                            .help("Raw DULT payload: \(dult.rawHexString)")
+                        chip(dult.network.displayName)
+                        statusChip(for: dult)
                     }
                 }
                 Text(device.id.uuidString)
@@ -45,7 +52,7 @@ struct DeviceCardView: View {
             Spacer(minLength: 12)
 
             HStack(spacing: 8) {
-                SignalBarsView(rssi: device.rssi, accent: device.isDULT)
+                SignalBarsView(rssi: device.rssi, litColor: highlightColor ?? .green)
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("\(device.rssi)")
                         .font(.title3.weight(.semibold))
@@ -59,16 +66,53 @@ struct DeviceCardView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(device.isDULT ? Color.accentColor.opacity(0.14) : Color.white.opacity(0.055))
+                .fill(highlightColor.map { $0.opacity(0.14) } ?? Color.white.opacity(0.055))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(
-                    device.isDULT ? Color.accentColor.opacity(0.7) : Color.white.opacity(0.08),
+                    highlightColor.map { $0.opacity(0.7) } ?? Color.white.opacity(0.08),
                     lineWidth: device.isDULT ? 1.5 : 1
                 )
         )
         .shadow(color: .black.opacity(0.35), radius: 5, y: 3)
+    }
+
+    private var iconName: String {
+        if device.isSeparated { return "exclamationmark.shield.fill" }
+        if device.isDULT { return "shield.fill" }
+        return "dot.radiowaves.left.and.right"
+    }
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption2.weight(.bold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(color, in: Capsule())
+            .foregroundStyle(.white)
+    }
+
+    private func chip(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.medium))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Color.white.opacity(0.1), in: Capsule())
+            .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private func statusChip(for dult: DULTStatus) -> some View {
+        switch dult.isNearOwner {
+        case false?:
+            badge("Separated", color: Self.warningColor)
+        case true?:
+            chip("Near Owner")
+        case nil:
+            // Status byte missing from the advertisement (non-compliant tracker).
+            chip("Status N/A")
+        }
     }
 }
 
@@ -76,7 +120,7 @@ struct DeviceCardView: View {
 /// Stronger than -60 dBm lights 3 bars, stronger than -75 lights 2, else 1.
 struct SignalBarsView: View {
     let rssi: Int
-    var accent = false
+    var litColor: Color = .green
 
     private var litBars: Int {
         if rssi >= -60 { return 3 }
@@ -88,9 +132,7 @@ struct SignalBarsView: View {
         HStack(alignment: .bottom, spacing: 3) {
             ForEach(0..<3, id: \.self) { index in
                 Capsule()
-                    .fill(index < litBars
-                          ? (accent ? Color.accentColor : Color.green)
-                          : Color.white.opacity(0.15))
+                    .fill(index < litBars ? litColor : Color.white.opacity(0.15))
                     .frame(width: 4, height: CGFloat(7 + index * 5))
             }
         }
@@ -98,17 +140,25 @@ struct SignalBarsView: View {
     }
 }
 
-#Preview("Cards", traits: .fixedLayout(width: 560, height: 240)) {
+#Preview("Cards", traits: .fixedLayout(width: 620, height: 340)) {
     VStack(spacing: 10) {
         DeviceCardView(device: DiscoveredDevice(
             id: UUID(), name: nil, rssi: -48,
             firstSeen: .now.addingTimeInterval(-300), lastSeen: .now,
-            sightingCount: 212, isDULT: true
+            sightingCount: 212,
+            dult: DULTStatus(serviceData: Data([0x01, 0x00, 0xAB, 0xCD]))
+        ))
+        DeviceCardView(device: DiscoveredDevice(
+            id: UUID(), name: "Tag Mate 3", rssi: -64,
+            firstSeen: .now.addingTimeInterval(-90), lastSeen: .now,
+            sightingCount: 41,
+            dult: DULTStatus(serviceData: Data([0x02, 0x01]))
         ))
         DeviceCardView(device: DiscoveredDevice(
             id: UUID(), name: "Living Room TV", rssi: -78,
             firstSeen: .now.addingTimeInterval(-1200), lastSeen: .now.addingTimeInterval(-4),
-            sightingCount: 56, isDULT: false
+            sightingCount: 56,
+            dult: nil
         ))
     }
     .padding()

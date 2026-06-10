@@ -74,7 +74,9 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
         let rssiValue = RSSI.intValue
         let name = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? peripheral.name
         let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data]
-        let advertisesDULT = serviceData?.keys.contains(Self.dultServiceUUID) ?? false
+        // Parse the DULT payload if this advertisement carries 0xFCB2 service
+        // data. DULTStatus.init returns nil for empty (unparseable) data.
+        let dultStatus = serviceData?[Self.dultServiceUUID].flatMap(DULTStatus.init(serviceData:))
 
         if var device = deviceMap[peripheral.identifier] {
             if rssiValue != Self.invalidRSSI {
@@ -83,7 +85,9 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
             device.lastSeen = now
             device.sightingCount += 1
             if let name { device.name = name }
-            device.isDULT = device.isDULT || advertisesDULT
+            // Latest DULT status wins (the near-owner bit changes over time);
+            // ads without DULT data leave the previous status in place.
+            if let dultStatus { device.dult = dultStatus }
             deviceMap[peripheral.identifier] = device
         } else {
             deviceMap[peripheral.identifier] = DiscoveredDevice(
@@ -93,7 +97,7 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
                 firstSeen: now,
                 lastSeen: now,
                 sightingCount: 1,
-                isDULT: advertisesDULT
+                dult: dultStatus
             )
         }
     }
