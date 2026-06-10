@@ -21,6 +21,9 @@ xcuserdata/
 # Python
 ml-pipeline/__pycache__/
 ml-pipeline/venv/
+ml-pipeline/.venv/
+ml-pipeline/data/
+ml-pipeline/model/
 *.pyc
 
 # Android

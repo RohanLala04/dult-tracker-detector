@@ -1,0 +1,10 @@
+[project]
+name = "ml-pipeline"
+version = "0.1.0"
+description = "Synthetic co-travel data, training, and Core AI export for the DULT follower classifier"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.0,<3.0",
+    "pandas>=2.2,<3.0",
+    "scikit-learn>=1.5,<2.0",
+]
