@@ -38,7 +38,15 @@ final class CoTravelDetector {
     var onUpdate: (([String: FollowingAssessment]) -> Void)?
 
     private let database: DatabaseManager
-    private let scorer: FollowingScorer = PlaceholderScorer()
+    /// The trained Core AI model on macOS 27+; rule-based bands on macOS 26.
+    private let scorer: FollowingScorer = {
+        if #available(macOS 27.0, *), let coreAI = CoreAIScorer() {
+            print("[CoTravelDetector] scoring with the Core AI model")
+            return coreAI
+        }
+        print("[CoTravelDetector] scoring with rules (Core AI needs macOS 27)")
+        return RuleBasedScorer()
+    }()
     /// The continuity rule only counts time within this run of the app, so
     /// sightings logged by earlier sessions cannot satisfy it alone.
     private let sessionStart = Date()
@@ -72,8 +80,8 @@ final class CoTravelDetector {
         for (uuid, features) in featuresByDevice {
             // Core AI on-device inference — WWDC 2026. Replaces Core ML per
             // Apple deprecation announcement June 9 2026.
-            // PlaceholderScorer stands in until the Python pipeline delivers
-            // a trained model to load through a Core AI session.
+            // Falls back to RuleBasedScorer where the Core AI runtime is
+            // unavailable (macOS 26.x).
             let score = scorer.score(features)
             assessments[uuid] = FollowingAssessment(
                 score: score,

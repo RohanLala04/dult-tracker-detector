@@ -13,6 +13,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D0DETECT0000000000000001 /* DULTDetector */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFolders = (
+				cotravel.coreaiasset,
+			);
 			path = DULTDetector;
 			sourceTree = "<group>";
 		};
