@@ -88,6 +88,59 @@ final class DatabaseManager {
         }
     }
 
+    /// Evaluates the co-travel heuristic over all logged sightings and
+    /// returns devices currently qualifying as candidate followers.
+    /// See CoTravelDetector for the rule definitions.
+    func followerCandidates(recencyWindow: TimeInterval,
+                            sessionStart: Date,
+                            minContinuousDuration: TimeInterval,
+                            minDistinctLocations: Int,
+                            minSeparatedRatio: Double) -> [String: FollowerFlag] {
+        queue.sync {
+            guard let db else { return [:] }
+            // max(MIN(timestamp), ?2) clamps the continuity window to the
+            // current session; the two-argument max() is SQLite's scalar form.
+            let sql = """
+                SELECT peripheral_uuid,
+                       COUNT(*),
+                       COUNT(DISTINCT location_label),
+                       MIN(timestamp),
+                       MAX(timestamp),
+                       AVG(CASE WHEN near_owner_bit = 0 THEN 1.0 ELSE 0.0 END)
+                FROM sightings
+                GROUP BY peripheral_uuid
+                HAVING (COUNT(DISTINCT location_label) >= ?1
+                        OR (MAX(timestamp) - max(MIN(timestamp), ?2)) >= ?3)
+                   AND AVG(CASE WHEN near_owner_bit = 0 THEN 1.0 ELSE 0.0 END) > ?4
+                   AND MAX(timestamp) >= ?5;
+                """
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                print("[DatabaseManager] follower query prepare failed: \(lastErrorMessage())")
+                return [:]
+            }
+            sqlite3_bind_int(statement, 1, Int32(minDistinctLocations))
+            sqlite3_bind_double(statement, 2, sessionStart.timeIntervalSince1970)
+            sqlite3_bind_double(statement, 3, minContinuousDuration)
+            sqlite3_bind_double(statement, 4, minSeparatedRatio)
+            sqlite3_bind_double(statement, 5, Date().timeIntervalSince1970 - recencyWindow)
+
+            var flags: [String: FollowerFlag] = [:]
+            while sqlite3_step(statement) == SQLITE_ROW {
+                guard let uuidText = sqlite3_column_text(statement, 0) else { continue }
+                flags[String(cString: uuidText)] = FollowerFlag(
+                    firstSeen: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3)),
+                    lastSeen: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
+                    sightingCount: Int(sqlite3_column_int64(statement, 1)),
+                    distinctLocations: Int(sqlite3_column_int64(statement, 2)),
+                    separatedRatio: sqlite3_column_double(statement, 5)
+                )
+            }
+            return flags
+        }
+    }
+
     /// Total rows logged so far (blocks until pending inserts finish).
     func sightingCount() -> Int? {
         queue.sync {

@@ -25,6 +25,9 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
     private var central: CBCentralManager!
     /// Persists every sighting; this is the dataset the ML pipeline trains on.
     let database = DatabaseManager()
+    private var coTravelDetector: CoTravelDetector?
+    /// Latest co-travel verdicts, keyed by peripheral UUID string (main queue).
+    private var followerFlags: [String: FollowerFlag] = [:]
     /// Working state, mutated on every advertisement (main queue).
     private var deviceMap: [UUID: DiscoveredDevice] = [:]
     private var receivedCount = 0
@@ -39,6 +42,13 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
         flushTimer = Timer.scheduledTimer(withTimeInterval: flushInterval, repeats: true) { [weak self] _ in
             self?.flush()
         }
+        let detector = CoTravelDetector(database: database)
+        detector.onUpdate = { [weak self] flags in
+            self?.followerFlags = flags
+            self?.flush()
+        }
+        detector.start()
+        coTravelDetector = detector
     }
 
     deinit {
@@ -137,7 +147,11 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
 
     /// Pushes the working state to the published properties (once per second).
     private func flush() {
-        devices = Array(deviceMap.values)
+        devices = deviceMap.values.map { device in
+            var device = device
+            device.followerFlag = followerFlags[device.id.uuidString]
+            return device
+        }
         advertisementCount = receivedCount
     }
 }

@@ -12,6 +12,14 @@ struct ContentView: View {
         scanner.devices.filter(\.isDULT).count
     }
 
+    private var flaggedDevices: [DiscoveredDevice] {
+        sortedDevices.filter(\.isFlagged)
+    }
+
+    private var unflaggedDevices: [DiscoveredDevice] {
+        sortedDevices.filter { !$0.isFlagged }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -84,7 +92,18 @@ struct ContentView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 10) {
-                    ForEach(sortedDevices) { device in
+                    if !flaggedDevices.isEmpty {
+                        sectionHeader("Alerts (\(flaggedDevices.count))",
+                                      systemImage: "exclamationmark.triangle.fill",
+                                      color: .red)
+                        ForEach(flaggedDevices) { device in
+                            DeviceCardView(device: device)
+                        }
+                        sectionHeader("All Devices",
+                                      systemImage: "antenna.radiowaves.left.and.right",
+                                      color: .secondary)
+                    }
+                    ForEach(unflaggedDevices) { device in
                         DeviceCardView(device: device)
                     }
                 }
@@ -93,6 +112,17 @@ struct ContentView: View {
                            value: sortedDevices.map(\.id))
             }
         }
+    }
+
+    private func sectionHeader(_ title: String, systemImage: String, color: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(color)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 2)
     }
 }
 
