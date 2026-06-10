@@ -67,12 +67,15 @@ struct DiscoveredDevice: Identifiable {
     /// Most recent parsed DULT payload, if the device has ever advertised
     /// the DULT service UUID 0xFCB2.
     var dult: DULTStatus?
-    /// Set while the co-travel heuristic considers this device a candidate
-    /// follower; cleared automatically once it no longer qualifies.
-    var followerFlag: FollowerFlag? = nil
+    /// Latest co-travel assessment; nil until the device has been scored
+    /// (assessments cover devices seen within the recency window).
+    var assessment: FollowingAssessment? = nil
 
     var isDULT: Bool { dult != nil }
-    var isFlagged: Bool { followerFlag != nil }
+    /// True when the following probability is in the alert (red) band.
+    var isFlagged: Bool {
+        (assessment?.score ?? 0) > CoTravelDetector.alertThreshold
+    }
     /// True when the tracker reports it is away from its owner - the state
     /// that matters for unwanted-tracking detection.
     var isSeparated: Bool { dult?.isNearOwner == false }

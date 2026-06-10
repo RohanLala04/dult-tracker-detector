@@ -14,8 +14,6 @@ struct DeviceCardView: View {
         return formatter
     }()
 
-    private static let alertColor = Color.red
-
     private static let durationFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.hour, .minute]
@@ -24,18 +22,29 @@ struct DeviceCardView: View {
         return formatter
     }()
 
+    /// Color band for a following probability: green below the elevated
+    /// threshold, amber up to the alert threshold, red above it.
+    static func scoreColor(_ score: Double) -> Color {
+        if score > CoTravelDetector.alertThreshold { return .red }
+        if score >= CoTravelDetector.elevatedThreshold { return .orange }
+        return .green
+    }
+
     /// nil for ordinary devices; accent for near-owner DULT; warning for
-    /// separated; alert red once the co-travel heuristic flags the device.
+    /// separated; the score band color once the probability is elevated.
     private var highlightColor: Color? {
-        if device.isFlagged { return Self.alertColor }
+        if let score = device.assessment?.score, score >= CoTravelDetector.elevatedThreshold {
+            return Self.scoreColor(score)
+        }
         guard device.isDULT else { return nil }
         return device.isSeparated ? Self.warningColor : Color.accentColor
     }
 
     var body: some View {
         VStack(spacing: 10) {
-            if let flag = device.followerFlag {
-                followingBanner(flag)
+            if let assessment = device.assessment,
+               assessment.score >= CoTravelDetector.elevatedThreshold {
+                probabilityBanner(assessment)
             }
             content
         }
@@ -54,21 +63,25 @@ struct DeviceCardView: View {
         .shadow(color: .black.opacity(0.35), radius: 5, y: 3)
     }
 
-    private func followingBanner(_ flag: FollowerFlag) -> some View {
+    private func probabilityBanner(_ assessment: FollowingAssessment) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-            Text("FOLLOWING?")
+            Text("Following: \(Self.percent(assessment.score))")
                 .font(.caption.weight(.heavy))
                 .kerning(0.5)
             Spacer()
-            Text("Tracked \(Self.durationFormatter.string(from: max(flag.trackedDuration, 60)) ?? "-")  ·  Seen \(flag.sightingCount)×")
+            Text("Tracked \(Self.durationFormatter.string(from: max(assessment.trackedDuration, 60)) ?? "-")  ·  Seen \(assessment.sightingCount)×")
                 .font(.caption)
                 .monospacedDigit()
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Self.alertColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(Self.scoreColor(assessment.score), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private static func percent(_ score: Double) -> String {
+        "\(Int((score * 100).rounded()))%"
     }
 
     private var content: some View {
@@ -88,6 +101,15 @@ struct DeviceCardView: View {
                             .help("Raw DULT payload: \(dult.rawHexString)")
                         chip(dult.network.displayName)
                         statusChip(for: dult)
+                        if let assessment = device.assessment,
+                           assessment.score < CoTravelDetector.elevatedThreshold {
+                            Text("Following: \(Self.percent(assessment.score))")
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.18), in: Capsule())
+                                .foregroundStyle(.green)
+                        }
                     }
                 }
                 Text(device.id.uuidString)
@@ -178,29 +200,40 @@ struct SignalBarsView: View {
     }
 }
 
-#Preview("Cards", traits: .fixedLayout(width: 620, height: 460)) {
+#Preview("Cards", traits: .fixedLayout(width: 620, height: 560)) {
     VStack(spacing: 10) {
         DeviceCardView(device: DiscoveredDevice(
             id: UUID(), name: nil, rssi: -42,
             firstSeen: .now.addingTimeInterval(-1500), lastSeen: .now,
             sightingCount: 1240,
             dult: DULTStatus(serviceData: Data([0x01, 0x00])),
-            followerFlag: FollowerFlag(
+            assessment: FollowingAssessment(
+                score: 0.85,
                 firstSeen: .now.addingTimeInterval(-1500), lastSeen: .now,
                 sightingCount: 1240, distinctLocations: 2, separatedRatio: 0.97
+            )
+        ))
+        DeviceCardView(device: DiscoveredDevice(
+            id: UUID(), name: "Tag Mate 3", rssi: -64,
+            firstSeen: .now.addingTimeInterval(-700), lastSeen: .now,
+            sightingCount: 410,
+            dult: DULTStatus(serviceData: Data([0x02, 0x00])),
+            assessment: FollowingAssessment(
+                score: 0.45,
+                firstSeen: .now.addingTimeInterval(-700), lastSeen: .now,
+                sightingCount: 410, distinctLocations: 1, separatedRatio: 0.92
             )
         ))
         DeviceCardView(device: DiscoveredDevice(
             id: UUID(), name: nil, rssi: -48,
             firstSeen: .now.addingTimeInterval(-300), lastSeen: .now,
             sightingCount: 212,
-            dult: DULTStatus(serviceData: Data([0x01, 0x00, 0xAB, 0xCD]))
-        ))
-        DeviceCardView(device: DiscoveredDevice(
-            id: UUID(), name: "Tag Mate 3", rssi: -64,
-            firstSeen: .now.addingTimeInterval(-90), lastSeen: .now,
-            sightingCount: 41,
-            dult: DULTStatus(serviceData: Data([0x02, 0x01]))
+            dult: DULTStatus(serviceData: Data([0x01, 0x01, 0xAB, 0xCD])),
+            assessment: FollowingAssessment(
+                score: 0.05,
+                firstSeen: .now.addingTimeInterval(-300), lastSeen: .now,
+                sightingCount: 212, distinctLocations: 1, separatedRatio: 0.0
+            )
         ))
         DeviceCardView(device: DiscoveredDevice(
             id: UUID(), name: "Living Room TV", rssi: -78,

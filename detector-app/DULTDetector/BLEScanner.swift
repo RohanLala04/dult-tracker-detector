@@ -31,7 +31,7 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
     private let locationProvider = LocationProvider()
     private var coTravelDetector: CoTravelDetector?
     /// Latest co-travel verdicts, keyed by peripheral UUID string (main queue).
-    private var followerFlags: [String: FollowerFlag] = [:]
+    private var assessments: [String: FollowingAssessment] = [:]
     /// Working state, mutated on every advertisement (main queue).
     private var deviceMap: [UUID: DiscoveredDevice] = [:]
     private var receivedCount = 0
@@ -47,8 +47,8 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
             self?.flush()
         }
         let detector = CoTravelDetector(database: database)
-        detector.onUpdate = { [weak self] flags in
-            self?.followerFlags = flags
+        detector.onUpdate = { [weak self] assessments in
+            self?.assessments = assessments
             self?.flush()
         }
         detector.start()
@@ -154,7 +154,7 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
     private func flush() {
         devices = deviceMap.values.map { device in
             var device = device
-            device.followerFlag = followerFlags[device.id.uuidString]
+            device.assessment = assessments[device.id.uuidString]
             return device
         }
         advertisementCount = receivedCount

@@ -178,7 +178,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -235,7 +235,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -257,8 +257,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "DULT Detector scans for nearby Bluetooth LE location trackers so it can warn you about unwanted tracking. Nothing leaves this Mac.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "DULT Detector uses your location to label where each Bluetooth device was seen, so it can recognize a tracker that follows you across different places. Location data is stored only on this Mac.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "DULT Detector uses your location to label where each Bluetooth device was seen, so it can recognize a tracker that follows you across different places. Location data is stored only on this Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -285,8 +285,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "DULT Detector scans for nearby Bluetooth LE location trackers so it can warn you about unwanted tracking. Nothing leaves this Mac.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "DULT Detector uses your location to label where each Bluetooth device was seen, so it can recognize a tracker that follows you across different places. Location data is stored only on this Mac.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "DULT Detector uses your location to label where each Bluetooth device was seen, so it can recognize a tracker that follows you across different places. Location data is stored only on this Mac.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -302,20 +302,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		D0DETECT000000000000000B /* Build configuration list for PBXProject "DULTDetector" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				D0DETECT000000000000000C /* Debug */,
-				D0DETECT000000000000000D /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		D0DETECT0000000000000007 /* Build configuration list for PBXNativeTarget "DULTDetector" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D0DETECT000000000000000E /* Debug */,
 				D0DETECT000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D0DETECT000000000000000B /* Build configuration list for PBXProject "DULTDetector" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0DETECT000000000000000C /* Debug */,
+				D0DETECT000000000000000D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -88,56 +88,58 @@ final class DatabaseManager {
         }
     }
 
-    /// Evaluates the co-travel heuristic over all logged sightings and
-    /// returns devices currently qualifying as candidate followers.
-    /// See CoTravelDetector for the rule definitions.
-    func followerCandidates(recencyWindow: TimeInterval,
-                            sessionStart: Date,
-                            minContinuousDuration: TimeInterval,
-                            minDistinctLocations: Int,
-                            minSeparatedRatio: Double) -> [String: FollowerFlag] {
+    /// Computes the per-device feature vector for the co-travel classifier,
+    /// covering devices seen within recencyWindow. Rows with RSSI 127
+    /// (invalid readings) are excluded from the statistics.
+    func deviceFeatures(recencyWindow: TimeInterval,
+                        sessionStart: Date) -> [String: DeviceFeatures] {
         queue.sync {
             guard let db else { return [:] }
-            // max(MIN(timestamp), ?2) clamps the continuity window to the
-            // current session; the two-argument max() is SQLite's scalar form.
             let sql = """
                 SELECT peripheral_uuid,
                        COUNT(*),
-                       COUNT(DISTINCT location_label),
+                       AVG(rssi),
+                       AVG(rssi * rssi) - AVG(rssi) * AVG(rssi),
                        MIN(timestamp),
                        MAX(timestamp),
+                       COUNT(DISTINCT location_label),
                        AVG(CASE WHEN near_owner_bit = 0 THEN 1.0 ELSE 0.0 END)
                 FROM sightings
+                WHERE rssi != 127
                 GROUP BY peripheral_uuid
-                HAVING (COUNT(DISTINCT location_label) >= ?1
-                        OR (MAX(timestamp) - max(MIN(timestamp), ?2)) >= ?3)
-                   AND AVG(CASE WHEN near_owner_bit = 0 THEN 1.0 ELSE 0.0 END) > ?4
-                   AND MAX(timestamp) >= ?5;
+                HAVING MAX(timestamp) >= ?1;
                 """
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                print("[DatabaseManager] follower query prepare failed: \(lastErrorMessage())")
+                print("[DatabaseManager] feature query prepare failed: \(lastErrorMessage())")
                 return [:]
             }
-            sqlite3_bind_int(statement, 1, Int32(minDistinctLocations))
-            sqlite3_bind_double(statement, 2, sessionStart.timeIntervalSince1970)
-            sqlite3_bind_double(statement, 3, minContinuousDuration)
-            sqlite3_bind_double(statement, 4, minSeparatedRatio)
-            sqlite3_bind_double(statement, 5, Date().timeIntervalSince1970 - recencyWindow)
+            sqlite3_bind_double(statement, 1, Date().timeIntervalSince1970 - recencyWindow)
 
-            var flags: [String: FollowerFlag] = [:]
+            let sessionStartTime = sessionStart.timeIntervalSince1970
+            var features: [String: DeviceFeatures] = [:]
             while sqlite3_step(statement) == SQLITE_ROW {
                 guard let uuidText = sqlite3_column_text(statement, 0) else { continue }
-                flags[String(cString: uuidText)] = FollowerFlag(
-                    firstSeen: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3)),
-                    lastSeen: Date(timeIntervalSince1970: sqlite3_column_double(statement, 4)),
-                    sightingCount: Int(sqlite3_column_int64(statement, 1)),
-                    distinctLocations: Int(sqlite3_column_int64(statement, 2)),
-                    separatedRatio: sqlite3_column_double(statement, 5)
+                let count = Int(sqlite3_column_int64(statement, 1))
+                let first = sqlite3_column_double(statement, 4)
+                let last = sqlite3_column_double(statement, 5)
+                let duration = max(last - first, 0)
+                features[String(cString: uuidText)] = DeviceFeatures(
+                    rssiMean: sqlite3_column_double(statement, 2),
+                    // Floating-point rounding can push tiny variances below 0.
+                    rssiVariance: max(sqlite3_column_double(statement, 3), 0),
+                    duration: duration,
+                    distinctLocations: Int(sqlite3_column_int64(statement, 6)),
+                    persistence: Double(count) / max(duration / 60.0, 1.0),
+                    separatedRatio: sqlite3_column_double(statement, 7),
+                    sightingCount: count,
+                    firstSeen: Date(timeIntervalSince1970: first),
+                    lastSeen: Date(timeIntervalSince1970: last),
+                    sessionDuration: max(last - max(first, sessionStartTime), 0)
                 )
             }
-            return flags
+            return features
         }
     }
 
