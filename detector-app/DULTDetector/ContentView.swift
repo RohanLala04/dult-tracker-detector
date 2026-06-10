@@ -51,6 +51,13 @@ struct ContentView: View {
                     Text(scanner.statusMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Image(systemName: "location.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 6)
+                    Text(scanner.currentLocationLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 

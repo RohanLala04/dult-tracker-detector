@@ -257,6 +257,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "DULT Detector scans for nearby Bluetooth LE location trackers so it can warn you about unwanted tracking. Nothing leaves this Mac.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "DULT Detector uses your location to label where each Bluetooth device was seen, so it can recognize a tracker that follows you across different places. Location data is stored only on this Mac.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -284,6 +285,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "DULT Detector scans for nearby Bluetooth LE location trackers so it can warn you about unwanted tracking. Nothing leaves this Mac.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "DULT Detector uses your location to label where each Bluetooth device was seen, so it can recognize a tracker that follows you across different places. Location data is stored only on this Mac.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

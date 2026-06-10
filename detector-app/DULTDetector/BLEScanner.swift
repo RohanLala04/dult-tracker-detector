@@ -21,10 +21,14 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
     @Published private(set) var advertisementCount = 0
     @Published private(set) var isScanning = false
     @Published private(set) var statusMessage = "Starting Bluetooth..."
+    /// Mirror of LocationProvider.currentLabel for the dashboard header.
+    @Published private(set) var currentLocationLabel = "unknown"
 
     private var central: CBCentralManager!
     /// Persists every sighting; this is the dataset the ML pipeline trains on.
     let database = DatabaseManager()
+    /// Labels each sighting with the user's current place.
+    private let locationProvider = LocationProvider()
     private var coTravelDetector: CoTravelDetector?
     /// Latest co-travel verdicts, keyed by peripheral UUID string (main queue).
     private var followerFlags: [String: FollowerFlag] = [:]
@@ -94,6 +98,7 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
             peripheralUUID: peripheral.identifier.uuidString,
             rssi: rssiValue,
             timestamp: now,
+            locationLabel: locationProvider.currentLabel,
             isDULT: dultStatus != nil,
             nearOwnerBit: dultStatus?.isNearOwner.map { $0 ? 1 : 0 },
             networkID: dultStatus.map { Int($0.networkIDByte) },
@@ -153,5 +158,8 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
             return device
         }
         advertisementCount = receivedCount
+        if currentLocationLabel != locationProvider.currentLabel {
+            currentLocationLabel = locationProvider.currentLabel
+        }
     }
 }

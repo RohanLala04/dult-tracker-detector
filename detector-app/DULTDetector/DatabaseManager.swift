@@ -49,6 +49,7 @@ final class DatabaseManager {
     func insertSighting(peripheralUUID: String,
                         rssi: Int,
                         timestamp: Date,
+                        locationLabel: String,
                         isDULT: Bool,
                         nearOwnerBit: Int?,
                         networkID: Int?,
@@ -61,25 +62,24 @@ final class DatabaseManager {
             sqlite3_bind_text(statement, 1, peripheralUUID, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(statement, 2, Int32(rssi))
             sqlite3_bind_double(statement, 3, timestamp.timeIntervalSince1970)
-            // location_label uses its 'unknown' default until the location
-            // feature exists, so it is not bound here.
-            sqlite3_bind_int(statement, 4, isDULT ? 1 : 0)
+            sqlite3_bind_text(statement, 4, locationLabel, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int(statement, 5, isDULT ? 1 : 0)
             if let nearOwnerBit {
-                sqlite3_bind_int(statement, 5, Int32(nearOwnerBit))
-            } else {
-                sqlite3_bind_null(statement, 5)
-            }
-            if let networkID {
-                sqlite3_bind_int(statement, 6, Int32(networkID))
+                sqlite3_bind_int(statement, 6, Int32(nearOwnerBit))
             } else {
                 sqlite3_bind_null(statement, 6)
             }
-            if let rawPayload, !rawPayload.isEmpty {
-                rawPayload.withUnsafeBytes { buffer in
-                    _ = sqlite3_bind_blob(statement, 7, buffer.baseAddress, Int32(buffer.count), SQLITE_TRANSIENT)
-                }
+            if let networkID {
+                sqlite3_bind_int(statement, 7, Int32(networkID))
             } else {
                 sqlite3_bind_null(statement, 7)
+            }
+            if let rawPayload, !rawPayload.isEmpty {
+                rawPayload.withUnsafeBytes { buffer in
+                    _ = sqlite3_bind_blob(statement, 8, buffer.baseAddress, Int32(buffer.count), SQLITE_TRANSIENT)
+                }
+            } else {
+                sqlite3_bind_null(statement, 8)
             }
 
             if sqlite3_step(statement) != SQLITE_DONE {
@@ -184,8 +184,8 @@ final class DatabaseManager {
 
         let insertSQL = """
             INSERT INTO sightings
-                (peripheral_uuid, rssi, timestamp, is_dult, near_owner_bit, network_id, raw_payload)
-            VALUES (?, ?, ?, ?, ?, ?, ?);
+                (peripheral_uuid, rssi, timestamp, location_label, is_dult, near_owner_bit, network_id, raw_payload)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
             """
         guard sqlite3_prepare_v2(db, insertSQL, -1, &insertStatement, nil) == SQLITE_OK else {
             throw DatabaseError.sqlite("prepare failed: \(lastErrorMessage())")
