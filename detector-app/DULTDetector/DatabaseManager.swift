@@ -32,6 +32,7 @@ final class DatabaseManager {
             try FileManager.default.createDirectory(at: supportDir, withIntermediateDirectories: true)
             let url = supportDir.appendingPathComponent("sightings.sqlite")
             try openAndPrepare(at: url)
+            deleteSimulatedRows()
             databaseURL = url
             print("[DatabaseManager] logging sightings to \(url.path)")
         } catch {
@@ -191,6 +192,21 @@ final class DatabaseManager {
             """
         guard sqlite3_prepare_v2(db, insertSQL, -1, &insertStatement, nil) == SQLITE_OK else {
             throw DatabaseError.sqlite("prepare failed: \(lastErrorMessage())")
+        }
+    }
+
+    /// Removes simulated rows left by follower-detection testing so a fresh
+    /// launch starts with only real sightings. Runs once at startup, before
+    /// scanning begins; failures here are non-fatal.
+    private func deleteSimulatedRows() {
+        let sql = "DELETE FROM sightings WHERE location_label LIKE 'test-%';"
+        if sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK {
+            let deleted = sqlite3_changes(db)
+            if deleted > 0 {
+                print("[DatabaseManager] removed \(deleted) simulated test rows")
+            }
+        } else {
+            print("[DatabaseManager] simulated-row cleanup failed: \(lastErrorMessage())")
         }
     }
 
