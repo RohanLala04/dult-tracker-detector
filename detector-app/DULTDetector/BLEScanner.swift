@@ -166,7 +166,9 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
     private func flush() {
         devices = deviceMap.values.map { device in
             var device = device
-            device.assessment = assessments[device.id.uuidString]
+            // Look up by continuity key so every rotated identity of one
+            // tracker shares the same merged assessment.
+            device.assessment = assessments[device.continuityKey]
             return device
         }
         advertisementCount = receivedCount

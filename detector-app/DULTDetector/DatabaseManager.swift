@@ -89,15 +89,32 @@ final class DatabaseManager {
         }
     }
 
-    /// Computes the per-device feature vector for the co-travel classifier,
-    /// covering devices seen within recencyWindow. Rows with RSSI 127
+    /// Computes the per-tracker feature vector for the co-travel classifier,
+    /// covering trackers seen within recencyWindow. Rows with RSSI 127
     /// (invalid readings) are excluded from the statistics.
+    ///
+    /// Sightings are grouped by a continuity key rather than the raw
+    /// peripheral UUID, so a tracker that rotates its MAC (which the DULT
+    /// spec mandates, section 3.5.1, producing a fresh peripheral UUID on
+    /// each rotation) is still tracked as one logical device. The key is the
+    /// DULT service-data payload (`raw_payload`) when present, otherwise the
+    /// peripheral UUID. Returned keyed by that continuity key, matching
+    /// `DiscoveredDevice.continuityKey`.
+    ///
+    /// Limitation: a fully compliant tracker also rotates its proprietary
+    /// payload at the same interval (section 3.8), and the minimal payload we
+    /// parse (network ID + status byte) is not unique to one device, so this
+    /// reconnects rotated identities only for advertisers with a stable
+    /// payload (such as this project's emulator). True cross-rotation
+    /// continuity for a compliant tracker requires the owner's key.
     func deviceFeatures(recencyWindow: TimeInterval,
                         sessionStart: Date) -> [String: DeviceFeatures] {
         queue.sync {
             guard let db else { return [:] }
             let sql = """
-                SELECT peripheral_uuid,
+                SELECT CASE WHEN raw_payload IS NOT NULL
+                            THEN 'p:' || hex(raw_payload)
+                            ELSE 'u:' || peripheral_uuid END AS continuity_key,
                        COUNT(*),
                        AVG(rssi),
                        AVG(rssi * rssi) - AVG(rssi) * AVG(rssi),
@@ -107,7 +124,7 @@ final class DatabaseManager {
                        AVG(CASE WHEN near_owner_bit = 0 THEN 1.0 ELSE 0.0 END)
                 FROM sightings
                 WHERE rssi != 127
-                GROUP BY peripheral_uuid
+                GROUP BY continuity_key
                 HAVING MAX(timestamp) >= ?1;
                 """
             var statement: OpaquePointer?
@@ -121,12 +138,12 @@ final class DatabaseManager {
             let sessionStartTime = sessionStart.timeIntervalSince1970
             var features: [String: DeviceFeatures] = [:]
             while sqlite3_step(statement) == SQLITE_ROW {
-                guard let uuidText = sqlite3_column_text(statement, 0) else { continue }
+                guard let keyText = sqlite3_column_text(statement, 0) else { continue }
                 let count = Int(sqlite3_column_int64(statement, 1))
                 let first = sqlite3_column_double(statement, 4)
                 let last = sqlite3_column_double(statement, 5)
                 let duration = max(last - first, 0)
-                features[String(cString: uuidText)] = DeviceFeatures(
+                features[String(cString: keyText)] = DeviceFeatures(
                     rssiMean: sqlite3_column_double(statement, 2),
                     // Floating-point rounding can push tiny variances below 0.
                     rssiVariance: max(sqlite3_column_double(statement, 3), 0),

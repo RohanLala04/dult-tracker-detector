@@ -77,13 +77,13 @@ final class CoTravelDetector {
             sessionStart: sessionStart
         )
         var assessments: [String: FollowingAssessment] = [:]
-        for (uuid, features) in featuresByDevice {
+        for (continuityKey, features) in featuresByDevice {
             // Core AI on-device inference — WWDC 2026. Replaces Core ML per
             // Apple deprecation announcement June 9 2026.
             // Falls back to RuleBasedScorer where the Core AI runtime is
             // unavailable (macOS 26.x).
             let score = scorer.score(features)
-            assessments[uuid] = FollowingAssessment(
+            assessments[continuityKey] = FollowingAssessment(
                 score: score,
                 firstSeen: features.firstSeen,
                 lastSeen: features.lastSeen,

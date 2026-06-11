@@ -89,6 +89,16 @@ struct DiscoveredDevice: Identifiable {
     var isFlagged: Bool {
         (assessment?.score ?? 0) > CoTravelDetector.alertThreshold
     }
+
+    /// Key used to merge sightings across MAC rotations for co-travel
+    /// detection. A DULT device is keyed by its service-data payload so
+    /// rotated peripheral UUIDs collapse to one logical tracker; everything
+    /// else is keyed by its peripheral UUID. Must match the `continuity_key`
+    /// expression in DatabaseManager.deviceFeatures.
+    var continuityKey: String {
+        if let dult { return "p:" + dult.rawHexString }
+        return "u:" + id.uuidString
+    }
     /// True when the tracker reports it is away from its owner - the state
     /// that matters for unwanted-tracking detection.
     var isSeparated: Bool { dult?.isNearOwner == false }
