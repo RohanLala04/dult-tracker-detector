@@ -60,6 +60,11 @@ ARCHETYPES = [
     ("follower", 0.18, 1),
 ]
 
+# Fraction of labels flipped to model imperfect ground truth (a follower the
+# user did not notice, or a benign tag they wrongly flagged). This caps the
+# achievable accuracy, keeping the synthetic metrics realistic.
+LABEL_NOISE = 0.05
+
 rng = np.random.default_rng(42)
 
 
@@ -131,23 +136,27 @@ def make_device(archetype: str, label: int, dwells: list[float], cal: Calibratio
     elif archetype == "companion":
         # Travels the whole itinerary, but its owner is present. Moves with
         # the user, so it shows the same RSSI jitter a follower does - the
-        # separated ratio is what distinguishes it, not signal physics.
+        # separated ratio is what distinguishes it, not signal physics. Some
+        # companions briefly separate from the owner, pushing the ratio up
+        # into follower territory and creating genuine class overlap.
         rssi_sigma = cal.rssi_sigma_static * rng.uniform(1.5, 3.5)
         visible_min = sum(dwells) * rng.uniform(0.85, 1.0)
         locations = len(dwells)
-        separated_ratio = float(rng.beta(2, 12))
+        separated_ratio = float(rng.beta(2, 8)) if rng.random() < 0.3 else float(rng.beta(2, 12))
 
     elif archetype == "lost_static":
         loc = int(rng.integers(0, len(dwells)))
         visible_min = dwells[loc] * rng.uniform(0.5, 1.0)
         locations = 1
-        separated_ratio = rng.uniform(0.6, 0.98)
+        # Some abandoned tags have weaker separated ratios (sporadic owner
+        # passes nearby), overlapping with the lower end of followers.
+        separated_ratio = rng.uniform(0.4, 0.98)
 
     elif archetype == "follower":
         # RSSI varies with body/bag movement; rate drops with attenuation.
         rssi_sigma = cal.rssi_sigma_static * rng.uniform(1.5, 3.5)
         rate *= rng.uniform(0.3, 1.0)
-        if rng.random() < 0.25:
+        if rng.random() < 0.3:
             # Recently planted: only the final location, possibly under the
             # 10-minute continuity threshold.
             visible_min = min(dwells[-1], rng.uniform(6.0, 45.0))
@@ -157,9 +166,11 @@ def make_device(archetype: str, label: int, dwells: list[float], cal: Calibratio
             visible_min = sum(seen) * rng.uniform(0.8, 1.0)
             locations = max(len(seen), 1)
         # Truncated or unparsed payloads log as not-separated, diluting the
-        # ratio the same way they do in the app's database.
-        payload_miss = rng.uniform(0.0, 0.45)
-        separated_ratio = rng.uniform(0.75, 0.98) * (1.0 - payload_miss)
+        # ratio the same way they do in the app's database. Heavy payload loss
+        # drags some followers' ratios below the rule threshold (false
+        # negatives the rule cannot recover).
+        payload_miss = rng.uniform(0.0, 0.6)
+        separated_ratio = rng.uniform(0.7, 0.98) * (1.0 - payload_miss)
 
     else:
         raise ValueError(archetype)
@@ -167,13 +178,20 @@ def make_device(archetype: str, label: int, dwells: list[float], cal: Calibratio
     n = max(int(rng.poisson(rate * visible_min)), 2)
     duration_s = visible_min * 60.0 * rng.uniform(0.9, 1.0)
     rssi_draws = rng.normal(rssi_mu, rssi_sigma, size=min(n, 2000))
+    # Measurement noise: real per-window features are noisier than the clean
+    # archetype, so add jitter to keep the classes from being trivially
+    # separable.
+    rssi_mean_obs = float(rssi_draws.mean()) + rng.normal(0, 1.5)
+    rssi_var_obs = max(float(rssi_draws.var()) + rng.normal(0, 2.0), 0.0)
+    persistence = n / max(duration_s / 60.0, 1.0) * rng.uniform(0.85, 1.15)
+    separated_ratio = float(np.clip(separated_ratio + rng.normal(0, 0.07), 0.0, 1.0))
     return {
-        "rssi_mean": float(rssi_draws.mean()),
-        "rssi_var": float(rssi_draws.var()),
+        "rssi_mean": rssi_mean_obs,
+        "rssi_var": rssi_var_obs,
         "duration_s": float(duration_s),
         "distinct_locations": int(locations),
-        "persistence_per_min": float(n / max(duration_s / 60.0, 1.0)),
-        "separated_ratio": float(np.clip(separated_ratio, 0.0, 1.0)),
+        "persistence_per_min": float(persistence),
+        "separated_ratio": separated_ratio,
         "archetype": archetype,
         "label": label,
     }
@@ -205,6 +223,11 @@ def main() -> None:
         rows.append(make_device(archetype, labels[archetype], dwells, cal))
 
     df = pd.DataFrame(rows)
+
+    # Apply label noise: flip a small random fraction of labels.
+    flip_mask = rng.random(len(df)) < LABEL_NOISE
+    df.loc[flip_mask, "label"] = 1 - df.loc[flip_mask, "label"]
+
     args.out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(args.out, index=False)
 
