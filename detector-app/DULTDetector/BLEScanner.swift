@@ -11,6 +11,10 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
 
     /// The DULT location-enabled advertisement service UUID (spec section 3.6).
     static let dultServiceUUID = CBUUID(string: "FCB2")
+    /// The project's test-beacon UUID. Android strips 0xFCB2 from third-party
+    /// app advertisements (anti-abuse), so the emulator advertises the same
+    /// DULT payload under this UUID; it is parsed and detected identically.
+    static let testBeaconUUID = CBUUID(string: "FC99")
 
     /// Core Bluetooth reports +127 when it could not read a valid RSSI.
     private static let invalidRSSI = 127
@@ -90,9 +94,17 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
         let rssiValue = RSSI.intValue
         let name = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? peripheral.name
         let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data]
-        // Parse the DULT payload if this advertisement carries 0xFCB2 service
-        // data. DULTStatus.init returns nil for empty (unparseable) data.
-        let dultStatus = serviceData?[Self.dultServiceUUID].flatMap(DULTStatus.init(serviceData:))
+        // Parse the DULT payload from real 0xFCB2 service data, or from the
+        // 0xFC99 test beacon. DULTStatus.init returns nil for empty data.
+        let dultStatus: DULTStatus? = {
+            if let data = serviceData?[Self.dultServiceUUID] {
+                return DULTStatus(serviceData: data, source: .dult)
+            }
+            if let data = serviceData?[Self.testBeaconUUID] {
+                return DULTStatus(serviceData: data, source: .testBeacon)
+            }
+            return nil
+        }()
 
         database.insertSighting(
             peripheralUUID: peripheral.identifier.uuidString,

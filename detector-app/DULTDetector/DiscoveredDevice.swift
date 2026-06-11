@@ -23,15 +23,27 @@ struct DULTStatus: Equatable {
         }
     }
 
+    /// Which service UUID carried the payload. A test beacon (0xFC99) is
+    /// parsed and treated identically to a real DULT advertisement; the
+    /// distinction exists only so the UI can label it. The test UUID is a
+    /// workaround for Android stripping 0xFCB2 from app advertisements.
+    enum Source: Equatable {
+        case dult        // 0xFCB2 - a real DULT tracker
+        case testBeacon  // 0xFC99 - the project's emulator beacon
+
+        var isTest: Bool { self == .testBeacon }
+    }
+
     let network: Network
     /// nil when the advertisement was too short to include the status byte
     /// (non-compliant tracker, or a truncated advertisement).
     let isNearOwner: Bool?
     /// The full raw service data bytes, kept for logging and later features.
     let rawServiceData: Data
+    let source: Source
 
     /// Fails only if the service data is completely empty.
-    init?(serviceData: Data) {
+    init?(serviceData: Data, source: Source) {
         let bytes = [UInt8](serviceData)
         guard let networkID = bytes.first else { return nil }
         switch networkID {
@@ -41,6 +53,7 @@ struct DULTStatus: Equatable {
         }
         isNearOwner = bytes.count >= 2 ? (bytes[1] & 0x01) == 1 : nil
         rawServiceData = serviceData
+        self.source = source
     }
 
     var rawHexString: String {

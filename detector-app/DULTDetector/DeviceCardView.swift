@@ -99,6 +99,10 @@ struct DeviceCardView: View {
                     if let dult = device.dult {
                         badge("DULT", color: highlightColor ?? .accentColor)
                             .help("Raw DULT payload: \(dult.rawHexString)")
+                        if dult.source.isTest {
+                            chip("TEST")
+                                .help("Emulator beacon on 0xFC99 (Android strips 0xFCB2)")
+                        }
                         chip(dult.network.displayName)
                         statusChip(for: dult)
                         if let assessment = device.assessment,
@@ -206,7 +210,7 @@ struct SignalBarsView: View {
             id: UUID(), name: nil, rssi: -42,
             firstSeen: .now.addingTimeInterval(-1500), lastSeen: .now,
             sightingCount: 1240,
-            dult: DULTStatus(serviceData: Data([0x01, 0x00])),
+            dult: DULTStatus(serviceData: Data([0x01, 0x00]), source: .dult),
             assessment: FollowingAssessment(
                 score: 0.85,
                 firstSeen: .now.addingTimeInterval(-1500), lastSeen: .now,
@@ -217,7 +221,7 @@ struct SignalBarsView: View {
             id: UUID(), name: "Tag Mate 3", rssi: -64,
             firstSeen: .now.addingTimeInterval(-700), lastSeen: .now,
             sightingCount: 410,
-            dult: DULTStatus(serviceData: Data([0x02, 0x00])),
+            dult: DULTStatus(serviceData: Data([0x02, 0x00]), source: .testBeacon),
             assessment: FollowingAssessment(
                 score: 0.45,
                 firstSeen: .now.addingTimeInterval(-700), lastSeen: .now,
@@ -228,7 +232,7 @@ struct SignalBarsView: View {
             id: UUID(), name: nil, rssi: -48,
             firstSeen: .now.addingTimeInterval(-300), lastSeen: .now,
             sightingCount: 212,
-            dult: DULTStatus(serviceData: Data([0x01, 0x01, 0xAB, 0xCD])),
+            dult: DULTStatus(serviceData: Data([0x01, 0x01, 0xAB, 0xCD]), source: .dult),
             assessment: FollowingAssessment(
                 score: 0.05,
                 firstSeen: .now.addingTimeInterval(-300), lastSeen: .now,
