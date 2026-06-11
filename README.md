@@ -169,7 +169,7 @@ The DULT spec **requires** trackers to rotate their advertising address for priv
 - **A BLE broadcaster** to generate advertisements:
   - The included **Android emulator** broadcasts on `0xFC99` (test beacon) and works on any Android API 26+ phone. But, per section 5.1, an Android phone **cannot** emit real `0xFCB2`.
   - For a genuine `0xFCB2` advertisement, use **non-filtering hardware**: an **ESP32** or **nRF** dev board, or a **Linux host running BlueZ** (`btmgmt` / `bluetoothctl`). (A Mac cannot advertise arbitrary service data either.)
-- **Optional: a real AirTag.** Note that current AirTags advertise Apple's legacy Find My format, not the draft-02 `0xFCB2` payload, so they appear via manufacturer data rather than as a parsed DULT card.
+- **Optional: a real AirTag.** Note that current AirTags advertise Apple's legacy Find My format, not the draft-02 `0xFCB2` payload, so they appear under Apple's manufacturer data (company ID `0x4C00`) rather than as a parsed DULT card. The detector still surfaces them as devices, just without DULT badges.
 
 ---
 
@@ -235,3 +235,5 @@ Open **DULT Emulator**, grant Bluetooth permission, tap **Start Broadcasting (Se
 ---
 
 *Built against draft-ledvina-apple-google-unwanted-trackers-02. The full specification text used for parsing is in `docs/dult-spec.txt`.*
+
+*Built at the University of Southern California, June 2026.*
