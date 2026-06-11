@@ -99,6 +99,23 @@ struct DiscoveredDevice: Identifiable {
         if let dult { return "p:" + dult.rawHexString }
         return "u:" + id.uuidString
     }
+
+    /// Folds another rotated identity of the same logical tracker (same
+    /// continuity key) into one device for display: most recent identity wins
+    /// for the live fields, sightings and time span accumulate across rotations.
+    func merged(with other: DiscoveredDevice) -> DiscoveredDevice {
+        let recent = other.lastSeen >= lastSeen ? other : self
+        return DiscoveredDevice(
+            id: recent.id,
+            name: recent.name ?? name ?? other.name,
+            rssi: recent.rssi,
+            firstSeen: Swift.min(firstSeen, other.firstSeen),
+            lastSeen: Swift.max(lastSeen, other.lastSeen),
+            sightingCount: sightingCount + other.sightingCount,
+            dult: recent.dult,
+            assessment: recent.assessment
+        )
+    }
     /// True when the tracker reports it is away from its owner - the state
     /// that matters for unwanted-tracking detection.
     var isSeparated: Bool { dult?.isNearOwner == false }

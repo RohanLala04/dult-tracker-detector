@@ -103,20 +103,20 @@ struct ContentView: View {
                         sectionHeader("Alerts (\(flaggedDevices.count))",
                                       systemImage: "exclamationmark.triangle.fill",
                                       color: .red)
-                        ForEach(flaggedDevices) { device in
+                        ForEach(flaggedDevices, id: \.continuityKey) { device in
                             DeviceCardView(device: device)
                         }
                         sectionHeader("All Devices",
                                       systemImage: "antenna.radiowaves.left.and.right",
                                       color: .secondary)
                     }
-                    ForEach(unflaggedDevices) { device in
+                    ForEach(unflaggedDevices, id: \.continuityKey) { device in
                         DeviceCardView(device: device)
                     }
                 }
                 .padding(16)
                 .animation(.spring(response: 0.45, dampingFraction: 0.85),
-                           value: sortedDevices.map(\.id))
+                           value: sortedDevices.map(\.continuityKey))
             }
         }
     }

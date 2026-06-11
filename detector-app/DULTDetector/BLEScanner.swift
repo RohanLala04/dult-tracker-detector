@@ -164,13 +164,16 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
 
     /// Pushes the working state to the published properties (once per second).
     private func flush() {
-        devices = deviceMap.values.map { device in
-            var device = device
-            // Look up by continuity key so every rotated identity of one
-            // tracker shares the same merged assessment.
+        // Attach each identity's merged assessment by continuity key, then
+        // collapse rotated identities that share a key into a single card so
+        // a tracker that rotates its MAC shows as one device, not many.
+        var byKey: [String: DiscoveredDevice] = [:]
+        for var device in deviceMap.values {
             device.assessment = assessments[device.continuityKey]
-            return device
+            let key = device.continuityKey
+            byKey[key] = byKey[key]?.merged(with: device) ?? device
         }
+        devices = Array(byKey.values)
         advertisementCount = receivedCount
         if currentLocationLabel != locationProvider.currentLabel {
             currentLocationLabel = locationProvider.currentLabel
