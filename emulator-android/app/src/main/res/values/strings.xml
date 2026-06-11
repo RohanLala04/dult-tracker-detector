@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="status_idle">Not broadcasting</string>
+    <string name="start_broadcast">Start Broadcasting (Separated)</string>
+    <string name="stop_broadcast">Stop Broadcasting</string>
+</resources>

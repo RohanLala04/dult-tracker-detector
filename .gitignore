@@ -28,5 +28,7 @@ ml-pipeline/model/
 
 # Android
 emulator-android/build/
+emulator-android/app/build/
 emulator-android/.gradle/
+emulator-android/.idea/
 emulator-android/local.properties
