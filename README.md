@@ -1,5 +1,11 @@
 # DULT Tracker Detector
 
+[![Platform](https://img.shields.io/badge/platform-macOS%2026%2B-black?logo=apple)](https://www.apple.com/macos/)
+[![Swift](https://img.shields.io/badge/Swift-5.9-orange?logo=swift&logoColor=white)](https://www.swift.org/)
+[![Core AI](https://img.shields.io/badge/Core%20AI-WWDC%202026-0a84ff)](https://developer.apple.com/core-ai/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![IETF Draft](https://img.shields.io/badge/IETF-draft--ledvina--apple--google--unwanted--trackers--02-lightgrey)](https://datatracker.ietf.org/doc/draft-ledvina-apple-google-unwanted-trackers/)
+
 **On-device detection of unwanted Bluetooth LE location trackers (AirTag-style), implementing the Apple/Google Detecting Unwanted Location Trackers (DULT) specification. Privacy-first: nothing leaves the device.**
 
 This project scans for Bluetooth Low Energy location trackers that may be following a person, parses their DULT advertisements, logs sightings to a local database, and flags a tracker that travels with the user across multiple locations as a candidate "follower." It pairs a native macOS detector with a machine-learning classifier (exported to Apple's Core AI framework) and an Android beacon used to drive end-to-end testing. All processing is local: there is no networking, no cloud, and no analytics.
