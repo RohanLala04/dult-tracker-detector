@@ -64,13 +64,17 @@ struct DeviceCardView: View {
     }
 
     private func probabilityBanner(_ assessment: FollowingAssessment) -> some View {
-        HStack(spacing: 8) {
+        // Score comes from the periodic co-travel assessment; the duration and
+        // sighting count come from the live device so the banner keeps ticking
+        // every refresh, including after the card turns red.
+        let tracked = max(device.lastSeen.timeIntervalSince(device.firstSeen), 60)
+        return HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
             Text("Following: \(Self.percent(assessment.score))")
                 .font(.caption.weight(.heavy))
                 .kerning(0.5)
             Spacer()
-            Text("Tracked \(Self.durationFormatter.string(from: max(assessment.trackedDuration, 60)) ?? "-")  ·  Seen \(assessment.sightingCount)×")
+            Text("Tracked \(Self.durationFormatter.string(from: tracked) ?? "-")  ·  Seen \(device.sightingCount)×")
                 .font(.caption)
                 .monospacedDigit()
         }

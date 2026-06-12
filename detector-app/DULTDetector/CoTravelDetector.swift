@@ -23,7 +23,7 @@ struct FollowingAssessment: Equatable {
 /// within the last 60 seconds (still nearby).
 final class CoTravelDetector {
 
-    static let checkInterval: TimeInterval = 30
+    static let checkInterval: TimeInterval = 10
     static let recencyWindow: TimeInterval = 60
     static let minContinuousDuration: TimeInterval = 600
     static let minDistinctLocations = 2
