@@ -100,6 +100,15 @@ struct DiscoveredDevice: Identifiable {
         return "u:" + id.uuidString
     }
 
+    /// Row identities for the dashboard's lazy list. The list caches row
+    /// views by ID across the entire stack, so the Alerts and All Devices
+    /// sections must not share one ID: when a device crosses the alert
+    /// threshold and moves between sections under a single ID, the stack
+    /// keeps serving the cached pre-move row, which then never refreshes
+    /// (stale score band and frozen last-seen/sighting counters).
+    var alertRowID: String { "alert-" + continuityKey }
+    var listRowID: String { "all-" + continuityKey }
+
     /// Folds another rotated identity of the same logical tracker (same
     /// continuity key) into one device for display: most recent identity wins
     /// for the live fields, sightings and time span accumulate across rotations.
