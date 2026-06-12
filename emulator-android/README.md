@@ -88,3 +88,9 @@ scoring, labeling it **TEST** in the UI so it is distinguishable from a real
 tracker. A genuine 0xFCB2 tracker (AirTag-class hardware, or any advertiser
 without the app-level restriction, such as an ESP32, nRF board, or Linux host
 running BlueZ) is detected with no TEST label and no code changes.
+
+Android rotates the advertising MAC every several minutes (the privacy
+behavior the DULT spec requires), so the phone appears under a new peripheral
+UUID after each rotation. The detector groups these by the payload so the
+emulator still shows as one tracked entity whose co-travel timer survives the
+rotations; for a clean demo, start broadcasting and leave the phone undisturbed.

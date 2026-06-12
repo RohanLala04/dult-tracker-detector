@@ -84,15 +84,17 @@ A truncated payload still parses the network ID and reports the status as unavai
 
 **Location labeling.** `CoreLocation` (when-in-use authorization) provides the device's position; MapKit's `MKReverseGeocodingRequest` turns it into a human-readable label (e.g. *"University Park, Los Angeles"*), re-geocoded only after the user moves about 250 m to respect rate limits, with rounded coordinates as an offline fallback. Each sighting records the current label, which is what lets the detector tell *distinct places* apart.
 
-**Co-travel detection heuristic.** Every 30 seconds, a background detector evaluates the database. A device is a candidate follower when **all** of:
+**Co-travel detection heuristic.** A background detector re-evaluates the database every few seconds. A device is a candidate follower when **all** of:
 
-1. it was seen at **2+ distinct locations** OR **continuously for 10+ minutes** within the current session, and
-2. it reported **separated** (near-owner bit = 0) in **more than half** of its sightings, and
+1. it reported **separated** (near-owner bit = 0) in **more than half** of its sightings, and
+2. it was seen at **2+ distinct locations** OR **continuously for 10+ minutes** within the current session, and
 3. it was **seen within the last 60 seconds** (still nearby).
 
-This rule is also the ML baseline.
+Separated is a necessary condition: a device that is not separated is an ambient device or an owner-present tag, never a follower, regardless of how long it is seen. Scoring is also restricted to DULT trackers, so ordinary BLE devices never raise an alert. This rule is also the ML baseline.
 
-**Probability scoring & UI.** For each recently-seen device the detector extracts a six-feature vector and runs it through a scorer that returns a following probability from `0.0` to `1.0`. The dashboard is a dark SwiftUI window: live cards sorted by signal strength, a three-bar RSSI indicator, DULT/network/Separated badges, and a colour-banded probability banner (**green below 40%, amber 40 to 70%, red above 70%**). Flagged devices rise into a pinned **Alerts** section.
+**MAC-rotation continuity.** The DULT spec requires trackers to rotate their advertising address (section 3.5.1), and Core Bluetooth surfaces each rotation as a brand-new peripheral UUID, which would reset the co-travel timer every few minutes. The detector groups sightings by a **continuity key** (the service-data payload for a DULT device, otherwise the peripheral UUID) so all of a tracker's rotated identities are treated as one logical device for scoring, and it collapses them into a single dashboard card. The 10-minute timer therefore survives rotation. (Scoping and limitations: see sections 5.3 and 11.)
+
+**Probability scoring & UI.** For each tracker the detector extracts a six-feature vector and runs it through a scorer that returns a following probability from `0.0` to `1.0`, evaluated only over the current session so the score reflects this travel episode rather than lifetime history. The dashboard is a dark SwiftUI window: live cards sorted by signal strength, a three-bar RSSI indicator, DULT/network/Separated badges, and a colour-banded probability banner (**green below 40%, amber 40 to 70%, red above 70%**) whose tracked-duration and sighting count update live. A separated tracker progresses amber to red as it crosses the thresholds; flagged devices rise into a pinned **Alerts** section.
 
 ---
 
@@ -155,7 +157,11 @@ Core Bluetooth does not give an application the peripheral's hardware MAC. Inste
 
 ### 5.3 MAC rotation creates new device identities
 
-The DULT spec **requires** trackers to rotate their advertising address for privacy (section 3.5.1), on every near-owner to separated transition and periodically otherwise. When the address rotates, macOS derives a fresh peripheral UUID, so the detector sees a **new device**. Without the owner's cryptographic key (the part of the spec only the owner's own phone can resolve), "same tracker, new MAC" is genuinely indistinguishable from "two different trackers." This is the same privacy mechanism that makes trackers hard to follow *and* hard to suppress; for continuous co-travel detection it means an uninterrupted broadcast accumulates under one identity.
+The DULT spec **requires** trackers to rotate their advertising address for privacy (section 3.5.1), on every near-owner to separated transition and periodically otherwise. When the address rotates, macOS derives a fresh peripheral UUID, so the detector sees a **new device**, which would reset the co-travel timer on every rotation.
+
+The detector mitigates this with a **payload-fingerprint continuity key**: sightings that share an identical DULT service-data payload but differ in peripheral UUID are treated as the same logical tracker, so rotated identities are merged for scoring and rendered as one dashboard card. In a live test the tracker's address rotated twice over 16 minutes (three peripheral UUIDs) and still surfaced as a single tracked entity that progressed to a red alert.
+
+This is honest mitigation, not a complete solution. A fully spec-compliant tracker also rotates its proprietary payload at the same interval (section 3.8), and the minimal payload the detector parses (network ID plus status byte) is not unique to one device, so payload fingerprinting reconnects rotations reliably only for advertisers with a stable payload (such as this project's emulator). Definitive "same tracker, new MAC" identification still requires the owner's cryptographic key, which by design only the owner's own phone can resolve.
 
 ---
 
@@ -214,7 +220,8 @@ Open **DULT Emulator**, grant Bluetooth permission, tap **Start Broadcasting (Se
 ## 9. Results
 
 - **Live, over-the-air detection works end to end.** With the Android emulator broadcasting, the detector receives, parses, logs, and displays the payload, verified as about 30 parsed DULT sightings in 30 seconds from one device, payload `01 00`, network **Apple**, status **Separated**.
-- **Co-travel detection fires** when a separated device is seen across 2+ locations or for 10+ continuous minutes, surfacing a red **"Following: 85%"** alert in a pinned Alerts section.
+- **Co-travel detection fires** when a separated tracker is seen across 2+ locations or for 10+ continuous minutes, progressing amber to a red **"Following: 85%"** alert in a pinned Alerts section, with a live-updating tracked-duration and sighting count. Ordinary BLE devices stay neutral.
+- **MAC rotation is handled.** In a live test a tracker rotated its address twice over 16 minutes yet stayed a single tracked entity and still reached the red alert (section 5.3).
 - **The ML pipeline runs end to end** (generate, train, evaluate vs baseline, export `.aimodel`), with the classifier clearly beating the rule baseline on a deliberately noisy synthetic set (F1 ~0.79 vs ~0.56; section 4).
 - **The detector parses real DULT byte layouts**, not mocks, and is resilient to truncated payloads and randomized identifiers.
 
@@ -236,7 +243,8 @@ Open **DULT Emulator**, grant Bluetooth permission, tap **Start Broadcasting (Se
 - **Reverse geocoding is not fully offline.** `MKReverseGeocodingRequest` (and the deprecated `CLGeocoder` it replaces) send coordinates to Apple's geocoding service to produce a place name. No BLE/sighting data leaves the device, and a coordinate-only fallback works offline, but the geocode lookup itself is a network call worth noting.
 - **The test-beacon UUID is a workaround, not the spec.** Detections from the Android emulator use `0xFC99` and are labeled **TEST**; only non-filtering hardware produces a real `0xFCB2` detection.
 - **Core AI inference requires macOS 27.** On macOS 26 the rule-based scorer runs; the Core AI path is compiled and bundled but does not execute.
-- **No owner-key resolution.** The detector cannot distinguish a rotated MAC of one tracker from two trackers, nor suppress an owner's own tags; that requires the cryptographic owner identification that, by design, only the owner's phone can perform.
+- **Payload-fingerprint continuity is a heuristic.** Merging rotated MACs by their DULT payload works for stable-payload advertisers (the emulator), but a compliant tracker rotates its payload too and the minimal parsed payload is not unique, so two distinct separated trackers could share a key. Definitive "same tracker, new MAC" identification, and suppressing an owner's own tags, requires the cryptographic owner key that by design only the owner's phone can resolve.
+- **Co-travel scoring is per session.** The 10-minute timer and location count reset when the app restarts, by design, so the score reflects the current travel episode rather than lifetime history.
 
 ---
 
