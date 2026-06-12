@@ -51,6 +51,7 @@ final class DatabaseManager {
                         rssi: Int,
                         timestamp: Date,
                         locationLabel: String,
+                        locationBin: String?,
                         isDULT: Bool,
                         nearOwnerBit: Int?,
                         networkID: Int?,
@@ -64,23 +65,28 @@ final class DatabaseManager {
             sqlite3_bind_int(statement, 2, Int32(rssi))
             sqlite3_bind_double(statement, 3, timestamp.timeIntervalSince1970)
             sqlite3_bind_text(statement, 4, locationLabel, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_int(statement, 5, isDULT ? 1 : 0)
-            if let nearOwnerBit {
-                sqlite3_bind_int(statement, 6, Int32(nearOwnerBit))
+            if let locationBin {
+                sqlite3_bind_text(statement, 5, locationBin, -1, SQLITE_TRANSIENT)
             } else {
-                sqlite3_bind_null(statement, 6)
+                sqlite3_bind_null(statement, 5)
             }
-            if let networkID {
-                sqlite3_bind_int(statement, 7, Int32(networkID))
+            sqlite3_bind_int(statement, 6, isDULT ? 1 : 0)
+            if let nearOwnerBit {
+                sqlite3_bind_int(statement, 7, Int32(nearOwnerBit))
             } else {
                 sqlite3_bind_null(statement, 7)
             }
-            if let rawPayload, !rawPayload.isEmpty {
-                rawPayload.withUnsafeBytes { buffer in
-                    _ = sqlite3_bind_blob(statement, 8, buffer.baseAddress, Int32(buffer.count), SQLITE_TRANSIENT)
-                }
+            if let networkID {
+                sqlite3_bind_int(statement, 8, Int32(networkID))
             } else {
                 sqlite3_bind_null(statement, 8)
+            }
+            if let rawPayload, !rawPayload.isEmpty {
+                rawPayload.withUnsafeBytes { buffer in
+                    _ = sqlite3_bind_blob(statement, 9, buffer.baseAddress, Int32(buffer.count), SQLITE_TRANSIENT)
+                }
+            } else {
+                sqlite3_bind_null(statement, 9)
             }
 
             if sqlite3_step(statement) != SQLITE_DONE {
@@ -92,6 +98,13 @@ final class DatabaseManager {
     /// Computes the per-tracker feature vector for the co-travel classifier,
     /// covering trackers seen within recencyWindow. Rows with RSSI 127
     /// (invalid readings) are excluded from the statistics.
+    ///
+    /// Distinct locations are counted over `location_bin` (the coordinate
+    /// anchor key), never over `location_label`: the geocoded display name
+    /// is unstable for a fixed position, and rows logged before the first
+    /// location fix carry a NULL bin rather than an "unknown" pseudo-place,
+    /// so neither can fabricate the second location that flips a stationary
+    /// tracker into an alert.
     ///
     /// Sightings are grouped by a continuity key rather than the raw
     /// peripheral UUID, so a tracker that rotates its MAC (which the DULT
@@ -120,7 +133,7 @@ final class DatabaseManager {
                        AVG(rssi * rssi) - AVG(rssi) * AVG(rssi),
                        MIN(timestamp),
                        MAX(timestamp),
-                       COUNT(DISTINCT location_label),
+                       COUNT(DISTINCT location_bin),
                        AVG(CASE WHEN near_owner_bit = 0 THEN 1.0 ELSE 0.0 END)
                 FROM sightings
                 WHERE rssi != 127 AND timestamp >= ?1 AND is_dult = 1
@@ -208,6 +221,7 @@ final class DatabaseManager {
                 rssi INTEGER NOT NULL,
                 timestamp REAL NOT NULL,
                 location_label TEXT NOT NULL DEFAULT 'unknown',
+                location_bin TEXT,
                 is_dult INTEGER NOT NULL DEFAULT 0,
                 near_owner_bit INTEGER,
                 network_id INTEGER,
@@ -215,21 +229,43 @@ final class DatabaseManager {
             );
             """)
 
+        // Databases created before the location_bin column existed gain it
+        // in place; their old rows keep a NULL bin and simply contribute no
+        // place to the distinct-location count.
+        if try !columnExists("location_bin", inTable: "sightings") {
+            try exec("ALTER TABLE sightings ADD COLUMN location_bin TEXT;")
+        }
+
         let insertSQL = """
             INSERT INTO sightings
-                (peripheral_uuid, rssi, timestamp, location_label, is_dult, near_owner_bit, network_id, raw_payload)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                (peripheral_uuid, rssi, timestamp, location_label, location_bin, is_dult, near_owner_bit, network_id, raw_payload)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
         guard sqlite3_prepare_v2(db, insertSQL, -1, &insertStatement, nil) == SQLITE_OK else {
             throw DatabaseError.sqlite("prepare failed: \(lastErrorMessage())")
         }
     }
 
+    private func columnExists(_ column: String, inTable table: String) throws -> Bool {
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "PRAGMA table_info(\(table));", -1, &statement, nil) == SQLITE_OK else {
+            throw DatabaseError.sqlite("table_info failed: \(lastErrorMessage())")
+        }
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let name = sqlite3_column_text(statement, 1),
+               String(cString: name) == column {
+                return true
+            }
+        }
+        return false
+    }
+
     /// Removes simulated rows left by follower-detection testing so a fresh
     /// launch starts with only real sightings. Runs once at startup, before
     /// scanning begins; failures here are non-fatal.
     private func deleteSimulatedRows() {
-        let sql = "DELETE FROM sightings WHERE location_label LIKE 'test-%';"
+        let sql = "DELETE FROM sightings WHERE location_label LIKE 'test-%' OR location_bin LIKE 'test-%';"
         if sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK {
             let deleted = sqlite3_changes(db)
             if deleted > 0 {

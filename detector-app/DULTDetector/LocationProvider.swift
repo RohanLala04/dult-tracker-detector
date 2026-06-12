@@ -13,6 +13,16 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
 
     @Published private(set) var currentLabel = "unknown"
     @Published private(set) var statusMessage = "Requesting location permission..."
+    /// Stable place key for the detector's distinct-location count: the
+    /// anchor coordinate rounded to ~100 m, moved only after traveling
+    /// regeocodeDistance from the previous anchor. Places are counted by
+    /// this key rather than by the display label because the geocoder
+    /// names the same spot inconsistently across lookups (observed live:
+    /// one position geocoding as three different neighborhood names),
+    /// which fabricates extra "distinct locations" while standing still.
+    /// nil until the first fix arrives, so sightings without a position
+    /// never contribute a place.
+    private(set) var currentBin: String?
 
     private let manager = CLLocationManager()
     private var activeGeocodingRequest: MKReverseGeocodingRequest?
@@ -56,6 +66,9 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
         let fallback = String(format: "%.3f,%.3f",
                               location.coordinate.latitude,
                               location.coordinate.longitude)
+        // The bin shares the anchor's hysteresis, so it cannot flap while
+        // stationary the way per-fix grid rounding would at a cell edge.
+        currentBin = fallback
 
         activeGeocodingRequest?.cancel()
         guard let request = MKReverseGeocodingRequest(location: location) else {

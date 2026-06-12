@@ -111,6 +111,7 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
             rssi: rssiValue,
             timestamp: now,
             locationLabel: locationProvider.currentLabel,
+            locationBin: locationProvider.currentBin,
             isDULT: dultStatus != nil,
             nearOwnerBit: dultStatus?.isNearOwner.map { $0 ? 1 : 0 },
             networkID: dultStatus.map { Int($0.networkIDByte) },
