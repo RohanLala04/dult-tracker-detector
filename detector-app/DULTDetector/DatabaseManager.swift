@@ -142,6 +142,13 @@ final class DatabaseManager {
             sqlite3_bind_double(statement, 1, sessionStartTime)
             sqlite3_bind_double(statement, 2, Date().timeIntervalSince1970 - recencyWindow)
 
+            // Measure the co-travel timer from the wall clock, not the latest
+            // database timestamp. Under heavy load the insert queue lags real
+            // time, so a database-derived duration can sit just under the
+            // threshold while the live UI already shows the device as present
+            // for 10 minutes. The device passed the recency filter, so it is
+            // here now; how long it has been here is "now minus first-seen".
+            let nowEpoch = Date().timeIntervalSince1970
             var features: [String: DeviceFeatures] = [:]
             while sqlite3_step(statement) == SQLITE_ROW {
                 guard let keyText = sqlite3_column_text(statement, 0) else { continue }
@@ -160,7 +167,7 @@ final class DatabaseManager {
                     sightingCount: count,
                     firstSeen: Date(timeIntervalSince1970: first),
                     lastSeen: Date(timeIntervalSince1970: last),
-                    sessionDuration: max(last - max(first, sessionStartTime), 0)
+                    sessionDuration: max(nowEpoch - max(first, sessionStartTime), 0)
                 )
             }
             return features
