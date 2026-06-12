@@ -80,9 +80,9 @@ The ML pipeline runs offline; its only runtime artifact, `cotravel.aimodel`, is 
 
 A truncated payload still parses the network ID and reports the status as unavailable rather than crashing.
 
-**SQLite logging.** Each received advertisement is written as one row to a local SQLite database (`sightings.sqlite`) in the app's sandboxed Application Support directory, using WAL mode for fast, crash-safe inserts on a serial background queue. Columns: `peripheral_uuid, rssi, timestamp, location_label, is_dult, near_owner_bit, network_id, raw_payload`. This is the dataset the co-travel detector and ML pipeline consume.
+**SQLite logging.** Each received advertisement is written as one row to a local SQLite database (`sightings.sqlite`) in the app's sandboxed Application Support directory, using WAL mode for fast, crash-safe inserts on a serial background queue. Columns: `peripheral_uuid, rssi, timestamp, location_label, location_bin, is_dult, near_owner_bit, network_id, raw_payload`. This is the dataset the co-travel detector and ML pipeline consume. Because every row feeds the detector's features, the app also refuses to launch a second copy of itself: concurrent instances would interleave rows with conflicting location data into the shared database.
 
-**Location labeling.** `CoreLocation` (when-in-use authorization) provides the device's position; MapKit's `MKReverseGeocodingRequest` turns it into a human-readable label (e.g. *"University Park, Los Angeles"*), re-geocoded only after the user moves about 250 m to respect rate limits, with rounded coordinates as an offline fallback. Each sighting records the current label, which is what lets the detector tell *distinct places* apart.
+**Location labeling.** `CoreLocation` (when-in-use authorization) provides the device's position; MapKit's `MKReverseGeocodingRequest` turns it into a human-readable label (e.g. *"University Park, Los Angeles"*), re-geocoded only after the user moves about 250 m to respect rate limits, with rounded coordinates as an offline fallback. The label is for display and the log only. What the detector counts as *distinct places* is a separate **location bin** — the anchor coordinate rounded to roughly 100 m, advanced only after about 250 m of real travel — because the geocoder names the same spot inconsistently (section 5.4). Sightings recorded before the first location fix carry no bin at all, so they never masquerade as a place.
 
 **Co-travel detection heuristic.** A background detector re-evaluates the database every few seconds. A device is a candidate follower when **all** of:
 
@@ -162,6 +162,12 @@ The DULT spec **requires** trackers to rotate their advertising address for priv
 The detector mitigates this with a **payload-fingerprint continuity key**: sightings that share an identical DULT service-data payload but differ in peripheral UUID are treated as the same logical tracker, so rotated identities are merged for scoring and rendered as one dashboard card. In a live test the tracker's address rotated twice over 16 minutes (three peripheral UUIDs) and still surfaced as a single tracked entity that progressed to a red alert.
 
 This is honest mitigation, not a complete solution. A fully spec-compliant tracker also rotates its proprietary payload at the same interval (section 3.8), and the minimal payload the detector parses (network ID plus status byte) is not unique to one device, so payload fingerprinting reconnects rotations reliably only for advertisers with a stable payload (such as this project's emulator). Definitive "same tracker, new MAC" identification still requires the owner's cryptographic key, which by design only the owner's own phone can resolve.
+
+### 5.4 Reverse geocoding names the same place inconsistently
+
+During live testing the detector jumped straight to a red alert while the tracker and the Mac sat motionless on a desk. The sightings log showed why: the same position had been reverse-geocoded under **three different names** — *"USC Campus"*, *"North University Park"*, and *"University of Southern California"* — within one session, fabricating the "seen at 2+ distinct locations" condition without any movement. Rows logged before the first location fix compounded it: their `"unknown"` label counted as yet another pseudo-place.
+
+The lesson: **a place name is a rendering of a location, not an identifier for it.** Distinct-place counting was moved off the geocoded string onto a coordinate-anchored **location bin** (anchor rounded to ~100 m, advanced only after ~250 m of real travel, absent until the first fix), and the geocoded name is now display-only.
 
 ---
 
