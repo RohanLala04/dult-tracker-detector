@@ -123,7 +123,7 @@ final class DatabaseManager {
                        COUNT(DISTINCT location_label),
                        AVG(CASE WHEN near_owner_bit = 0 THEN 1.0 ELSE 0.0 END)
                 FROM sightings
-                WHERE rssi != 127 AND timestamp >= ?1
+                WHERE rssi != 127 AND timestamp >= ?1 AND is_dult = 1
                 GROUP BY continuity_key
                 HAVING MAX(timestamp) >= ?2;
                 """

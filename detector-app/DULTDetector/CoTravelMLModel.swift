@@ -157,19 +157,19 @@ final class CoreAIScorer: FollowingScorer {
 
 /// Rule-based scorer: the macOS 26 fallback, and the stand-in wherever the
 /// Core AI model cannot load. Maps the co-travel heuristic onto three fixed
-/// probability bands:
-///   0.85  meets the full co-travel heuristic
-///   0.45  borderline - meets exactly one of the two main conditions
-///   0.05  clean
+/// probability bands. Reporting separated (away from its owner) is required
+/// for any elevated score: a device that is not separated is an ambient
+/// device or an owner-present tag, not a follower, no matter how long it is
+/// seen.
+///   0.85  separated and traveling: candidate follower
+///   0.45  separated but not yet traveling: worth watching
+///   0.05  not separated: not a co-travel threat
 struct RuleBasedScorer: FollowingScorer {
     func score(_ features: DeviceFeatures) -> Double {
+        let mostlySeparated = features.separatedRatio > CoTravelDetector.minSeparatedRatio
+        guard mostlySeparated else { return 0.05 }
         let traveled = features.distinctLocations >= CoTravelDetector.minDistinctLocations
             || features.sessionDuration >= CoTravelDetector.minContinuousDuration
-        let mostlySeparated = features.separatedRatio > CoTravelDetector.minSeparatedRatio
-        switch (traveled, mostlySeparated) {
-        case (true, true): return 0.85
-        case (true, false), (false, true): return 0.45
-        case (false, false): return 0.05
-        }
+        return traveled ? 0.85 : 0.45
     }
 }
