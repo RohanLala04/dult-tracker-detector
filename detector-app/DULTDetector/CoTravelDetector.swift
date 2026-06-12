@@ -63,7 +63,9 @@ final class CoTravelDetector {
 
     func start() {
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + Self.checkInterval, repeating: Self.checkInterval)
+        // First check shortly after launch so a probability appears within
+        // seconds rather than after a full interval, then every interval.
+        timer.schedule(deadline: .now() + 3, repeating: Self.checkInterval)
         timer.setEventHandler { [weak self] in
             self?.check()
         }

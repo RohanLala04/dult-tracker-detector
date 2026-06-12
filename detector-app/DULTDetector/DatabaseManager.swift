@@ -123,9 +123,9 @@ final class DatabaseManager {
                        COUNT(DISTINCT location_label),
                        AVG(CASE WHEN near_owner_bit = 0 THEN 1.0 ELSE 0.0 END)
                 FROM sightings
-                WHERE rssi != 127
+                WHERE rssi != 127 AND timestamp >= ?1
                 GROUP BY continuity_key
-                HAVING MAX(timestamp) >= ?1;
+                HAVING MAX(timestamp) >= ?2;
                 """
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
@@ -133,9 +133,15 @@ final class DatabaseManager {
                 print("[DatabaseManager] feature query prepare failed: \(lastErrorMessage())")
                 return [:]
             }
-            sqlite3_bind_double(statement, 1, Date().timeIntervalSince1970 - recencyWindow)
-
             let sessionStartTime = sessionStart.timeIntervalSince1970
+            // Scope aggregation to the current app session so the co-travel
+            // score reflects this episode of travel, not a continuity key's
+            // entire lifetime history (the minimal DULT payload is not unique,
+            // so an all-time merge inflates locations and duration and jumps
+            // straight to an alert).
+            sqlite3_bind_double(statement, 1, sessionStartTime)
+            sqlite3_bind_double(statement, 2, Date().timeIntervalSince1970 - recencyWindow)
+
             var features: [String: DeviceFeatures] = [:]
             while sqlite3_step(statement) == SQLITE_ROW {
                 guard let keyText = sqlite3_column_text(statement, 0) else { continue }
